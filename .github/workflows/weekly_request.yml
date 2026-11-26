@@ -1,0 +1,44 @@
+name: weekly_request
+
+on:
+  schedule:
+    # Mandag kl. 08 dansk tid (06:17 UTC om sommeren, 07:17 om vinteren). GitHub kan forsinke
+    # eller springe planlagte kørsler over, så der prøves flere gange mandag og tirsdag.
+    # Koden sender kun fra mandag kl. 8 og kun én gang pr. uge.
+    - cron: "17 6,7,9,11,14,17 * * 1"
+    - cron: "17 7,12,17 * * 2"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (vis mailen uden at sende den)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lager
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Send mandagsmail
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          MIN_EMAIL: ${{ secrets.MIN_EMAIL }}
+        run: >-
+          python -m lager.main weekly
+          ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+          ${{ inputs.dry_run && '--dry-run' || '' }}

@@ -1,0 +1,37 @@
+name: setup
+
+# Opretter manglende ark og kolonner i regnearket og retter formel og formatering.
+# Sikker at køre igen: eksisterende data røres ikke.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (vis hvad der ville blive ændret)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lager
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Setup af regneark
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: python -m lager.main setup ${{ inputs.dry_run && '--dry-run' || '' }}

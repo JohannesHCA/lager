@@ -1,0 +1,50 @@
+name: import_produkter
+
+# Tilføjer eller retter varer i arket Produkter ud fra en tabulatorsepareret tabel med
+# samme overskrifter som arket. "tilføj": nye varer (mindst Varenr og Navn), eksisterende
+# røres ikke. "ret": kolonnerne i tabellen overskrives for varer med samme Varenr.
+# "slet": varerne i kolonnen Varenr fjernes – kun hvis de ingen bevægelser har.
+on:
+  workflow_dispatch:
+    inputs:
+      tabel:
+        description: "Tabel med overskrifter (tabulatorsepareret), fx Varenr<TAB>Navn<TAB>Startbeholdning"
+        type: string
+        required: true
+      tilstand:
+        description: "tilføj = nye varer; ret = overskriv kolonner for samme Varenr; slet = fjern varer uden bevægelser; lokationer = tilføj lokationer"
+        type: choice
+        options: ["tilføj", "ret", "slet", "lokationer"]
+        default: "tilføj"
+      dry_run:
+        description: "Dry-run (vis varerne uden at skrive)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lager
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Importér varer
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          IMPORT_PRODUKTER: ${{ inputs.tabel }}
+          IMPORT_TILSTAND: ${{ inputs.tilstand }}
+        run: python -m lager.main importer ${{ inputs.dry_run && '--dry-run' || '' }}

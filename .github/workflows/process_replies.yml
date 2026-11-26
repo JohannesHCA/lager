@@ -1,0 +1,53 @@
+name: process_replies
+
+on:
+  schedule:
+    # To gange i timen fra ca. kl. 06 til 23 dansk tid (04-21 UTC), uden for de travle
+    # hele timer. GitHub springer ofte planlagte kørsler over, så to forsøg giver færre huller.
+    - cron: "17,47 4-21 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (vis hvad der ville blive skrevet, uden at skrive)"
+        type: boolean
+        default: false
+      genbehandl:
+        description: "Genbehandl én mail (Gmail message-id) – kun hvis intet fra den er bogført"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lager
+  cancel-in-progress: false
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Installér Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Behandl svar
+        env:
+          # Token fra `claude setup-token`: forbruget går på dit Claude-abonnement.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          MIN_EMAIL: ${{ secrets.MIN_EMAIL }}
+          SIKKERHEDSTAERSKEL: ${{ vars.SIKKERHEDSTAERSKEL || '0.85' }}
+          GENBEHANDL: ${{ inputs.genbehandl }}
+        run: python -m lager.main process ${{ inputs.dry_run && '--dry-run' || '' }} ${GENBEHANDL:+--genbehandl "$GENBEHANDL"}
